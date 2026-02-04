@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PAC-MAN - 真相認同版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        body {
+            background-color: #050505;
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        .neon-text { text-shadow: 0 0 10px #00f3ff, 0 0 20px #00f3ff; }
+        .neon-border { box-shadow: 0 0 15px #00f3ff; border: 2px solid #00f3ff; }
+        #game-canvas {
+            background: #000;
+            touch-action: none;
+            max-width: 100%;
+        }
+        .banned-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: white; color: black;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 3rem; font-weight: bold; z-index: 9999;
+            display: none;
+        }
+        .config-btn {
+            border: 2px solid #555;
+            padding: 8px 15px;
+            border-radius: 10px;
+            transition: 0.3s;
+        }
+        .config-btn.active {
+            border-color: #00f3ff;
+            background: rgba(0, 243, 255, 0.2);
+            box-shadow: 0 0 10px #00f3ff;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center py-6">
+
+    <div id="banned-overlay" class="banned-screen">想都別想</div>
+
+    <!-- 開始畫面 -->
+    <div id="start-screen" class="w-full max-w-md px-6 flex flex-col items-center">
+        <h1 class="text-4xl font-bold mb-8 neon-text">PAC-MAN NEON</h1>
+        
+        <div class="w-full space-y-6 bg-gray-900/50 p-6 rounded-2xl border border-gray-700">
+            <div>
+                <label class="block mb-2 text-sm text-cyan-400 font-bold">玩家名稱</label>
+                <input type="text" id="player-name" placeholder="輸入名稱" 
+                    class="w-full bg-black border border-gray-600 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-cyan-400">
+            </div>
+
+            <div>
+                <label class="block mb-2 text-sm text-cyan-400 font-bold">選擇外型</label>
+                <div class="flex gap-2">
+                    <button class="config-btn active" onclick="setShape('circle', this)">圓形</button>
+                    <button class="config-btn" onclick="setShape('square', this)">方形</button>
+                    <button class="config-btn" onclick="setShape('triangle', this)">三角形</button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block mb-2 text-sm text-cyan-400 font-bold">選擇顏色</label>
+                <div class="flex gap-2">
+                    <button class="config-btn active" onclick="setColor('#ffff00', this)">經典黃</button>
+                    <button class="config-btn" onclick="setColor('#39ff14', this)">霓虹綠</button>
+                    <button class="config-btn" onclick="setColor('#ff00ff', this)">粉紫色</button>
+                </div>
+            </div>
+        </div>
+
+        <button id="start-btn" class="mt-8 w-full neon-border bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 rounded-full transition text-xl">
+            進入遊戲
+        </button>
+    </div>
+
+    <!-- 遊戲容器 -->
+    <div id="game-container" class="hidden flex flex-col items-center w-full">
+        <div class="flex justify-between w-full max-w-[380px] mb-4 px-4 font-bold">
+            <div class="text-cyan-400 text-xl">SCORE: <span id="score">0</span></div>
+            <div id="status-tag" class="text-yellow-400">NORMAL</div>
+        </div>
+        
+        <div class="relative">
+            <!-- 結算 UI 面板 -->
+            <div id="ui-overlay" class="absolute inset-0 bg-black/95 z-50 hidden flex-col items-center justify-center text-center p-6 border-4 border-cyan-500 rounded-lg">
+                
+                <!-- 勝利區塊 -->
+                <div id="victory-box" class="w-full">
+                    <h2 id="msg-text" class="text-2xl font-bold mb-2 text-yellow-400"></h2>
+                    <p class="text-xl mb-6 text-cyan-300">認同不認同？</p>
+                    
+                    <div id="choice-buttons" class="flex gap-4 justify-center mb-6">
+                        <button onclick="handleResponse(true)" class="bg-green-600 hover:bg-green-500 px-8 py-3 rounded-xl font-bold transition-all transform active:scale-95">認同</button>
+                        <button onclick="handleResponse(false)" class="bg-red-600 hover:bg-red-500 px-8 py-3 rounded-xl font-bold transition-all transform active:scale-95">不認同</button>
+                    </div>
+
+                    <!-- 回應訊息 -->
+                    <div id="response-msg" class="hidden mb-6 p-4 bg-gray-800 rounded-lg border border-gray-600 italic text-white animate-bounce">
+                    </div>
+                </div>
+
+                <!-- 失敗區塊 -->
+                <div id="death-box" class="hidden">
+                    <h2 class="text-3xl font-bold text-red-500 mb-6">被抓到了！</h2>
+                </div>
+
+                <div id="final-emoji" class="text-6xl mb-6">🌈</div>
+                <button onclick="location.reload()" class="bg-white text-black px-10 py-3 rounded-full font-bold hover:bg-gray-200 transition">重新開始</button>
+            </div>
+            
+            <canvas id="game-canvas" class="neon-border rounded-lg"></canvas>
+        </div>
+        
+        <!-- 移動鍵 -->
+        <div class="mt-8 grid grid-cols-3 gap-4 pb-20">
+            <div class="col-start-2"><button class="bg-gray-800 w-16 h-16 rounded-2xl border-b-4 border-black active:bg-cyan-700 flex items-center justify-center text-2xl" onpointerdown="pacman.nextDir=3">▲</button></div>
+            <div class="row-start-2"><button class="bg-gray-800 w-16 h-16 rounded-2xl border-b-4 border-black active:bg-cyan-700 flex items-center justify-center text-2xl" onpointerdown="pacman.nextDir=2">◀</button></div>
+            <div class="row-start-2 col-start-2"><button class="bg-gray-800 w-16 h-16 rounded-2xl border-b-4 border-black active:bg-cyan-700 flex items-center justify-center text-2xl" onpointerdown="pacman.nextDir=1">▼</button></div>
+            <div class="row-start-2 col-start-3"><button class="bg-gray-800 w-16 h-16 rounded-2xl border-b-4 border-black active:bg-cyan-700 flex items-center justify-center text-2xl" onpointerdown="pacman.nextDir=0">▶</button></div>
+        </div>
+    </div>
+
+    <script>
+        let playerShape = 'circle', playerColor = '#ffff00';
+        const TILE = 20, MAP_W = 19, MAP_H = 21;
+        let powerMode = false, powerTimer = 0;
+        
+        function setShape(s, btn) { playerShape = s; btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+        function setColor(c, btn) { playerColor = c; btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+
+        // 黑名單判定 (不要改這段)
+        const BANNED_1 = ['李','理','里','離','利','力','禮','裡','荔','蠡','莉'];
+        const BANNED_2 = ['翊','一','以','義','意','億','益','易','藝','依','伊','譯','羿','熠'];
+        const BANNED_3 = ['凱','開','楷','慨','楷','鍇','鎧','揩','勘','開'];
+        function checkBanned(name) {
+            const n = name.trim();
+            if (n.toLowerCase() === 'cano' || n === '李翊凱') return true;
+            if (n.length === 3 && BANNED_1.includes(n[0]) && BANNED_2.includes(n[1]) && BANNED_3.includes(n[2])) return true;
+            return false;
+        }
+
+        function handleResponse(isAgree) {
+            const msg = document.getElementById('response-msg');
+            const btns = document.getElementById('choice-buttons');
+            msg.innerText = isAgree ? "很好，這是事實。" : "不認同也沒用，這還是事實。";
+            msg.classList.remove('hidden');
+            btns.classList.add('opacity-50', 'pointer-events-none');
+        }
+
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = MAP_W * TILE; canvas.height = MAP_H * TILE;
+
+        const MAP_DATA = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,3,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,3,1],
+            [1,0,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,0,1,0,1,1,1,1,1,0,1,0,1,1,0,1],
+            [1,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1],
+            [1,1,1,1,0,1,1,1,2,1,2,1,1,1,0,1,1,1,1],
+            [2,2,2,1,0,1,2,2,2,2,2,2,2,1,0,1,2,2,2],
+            [1,1,1,1,0,1,2,1,1,2,1,1,2,1,0,1,1,1,1],
+            [2,2,2,2,0,2,2,1,2,2,2,1,2,2,0,2,2,2,2],
+            [1,1,1,1,0,1,2,1,1,1,1,1,2,1,0,1,1,1,1],
+            [2,2,2,1,0,1,2,2,2,2,2,2,2,1,0,1,2,2,2],
+            [1,1,1,1,0,1,2,1,1,1,1,1,2,1,0,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],
+            [1,0,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,0,1],
+            [1,3,0,1,0,0,0,0,0,2,0,0,0,0,0,1,0,3,1],
+            [1,1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,1],
+            [1,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1],
+            [1,0,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,0,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+        let currentMap = MAP_DATA.map(r => [...r]);
+
+        const pacman = { x: 9, y: 15, pixelX: 9*TILE, pixelY: 15*TILE, dir: 0, nextDir: 0, speed: 2, mouth: 0, mDir: 1 };
+        const ghosts = [
+            { id: 1, x: 9, y: 8, pixelX: 9*TILE, pixelY: 8*TILE, color: '#ff0000', dir: 0, speed: 1.25, isFrightened: false },
+            { id: 2, x: 9, y: 9, pixelX: 9*TILE, pixelY: 9*TILE, color: '#00ffff', dir: 2, speed: 1.25, isFrightened: false }
+        ];
+
+        let score = 0, running = false, pName = "";
+
+        function canGo(x, y, d) {
+            let nx = x, ny = y;
+            if (d === 0) nx++; else if (d === 1) ny++; else if (d === 2) nx--; else if (d === 3) ny--;
+            if (ny < 0 || ny >= MAP_H || nx < 0 || nx >= MAP_W) return false;
+            return currentMap[ny][nx] !== 1;
+        }
+
+        document.getElementById('start-btn').onclick = () => {
+            const input = document.getElementById('player-name').value;
+            if (checkBanned(input)) { document.getElementById('banned-overlay').style.display = 'flex'; return; }
+            if(!input) return;
+            pName = input;
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-container').classList.remove('hidden');
+            running = true; loop();
+        };
+
+        function update() {
+            if(!running) return;
+            if (powerMode && --powerTimer <= 0) { powerMode = false; ghosts.forEach(g => g.isFrightened = false); document.getElementById('status-tag').innerText = "NORMAL"; }
+
+            if (pacman.pixelX % TILE === 0 && pacman.pixelY % TILE === 0) {
+                pacman.x = Math.round(pacman.pixelX / TILE); pacman.y = Math.round(pacman.pixelY / TILE);
+                const cell = currentMap[pacman.y][pacman.x];
+                if (cell === 0 || cell === 3) {
+                    currentMap[pacman.y][pacman.x] = 2; score += (cell === 3 ? 50 : 10);
+                    if (cell === 3) { powerMode = true; powerTimer = 450; ghosts.forEach(g => g.isFrightened = true); document.getElementById('status-tag').innerText = "POWER UP!"; }
+                    document.getElementById('score').innerText = score;
+                    if(!currentMap.some(row => row.includes(0) || row.includes(3))) gameOver(pName + " 是 Gay (事實)", false);
+                }
+                if (canGo(pacman.x, pacman.y, pacman.nextDir)) pacman.dir = pacman.nextDir;
+            }
+
+            if (canGo(pacman.x, pacman.y, pacman.dir)) {
+                if (pacman.dir === 0) pacman.pixelX += pacman.speed; else if (pacman.dir === 1) pacman.pixelY += pacman.speed; else if (pacman.dir === 2) pacman.pixelX -= pacman.speed; else if (pacman.dir === 3) pacman.pixelY -= pacman.speed;
+                pacman.mouth += 0.15 * pacman.mDir; if(pacman.mouth > 0.3 || pacman.mouth < 0) pacman.mDir *= -1;
+            }
+
+            ghosts.forEach(g => {
+                if (g.pixelX % TILE === 0 && g.pixelY % TILE === 0) {
+                    g.x = Math.round(g.pixelX / TILE); g.y = Math.round(g.pixelY / TILE);
+                    const options = [0,1,2,3].filter(d => canGo(g.x, g.y, d) && d !== (g.dir+2)%4);
+                    if(options.length) g.dir = options[Math.floor(Math.random() * options.length)]; else g.dir = (g.dir+2)%4;
+                }
+                const gSpeed = g.isFrightened ? g.speed * 0.7 : g.speed;
+                if (g.dir === 0) g.pixelX += gSpeed; else if (g.dir === 1) g.pixelY += gSpeed; else if (g.dir === 2) g.pixelX -= gSpeed; else if (g.dir === 3) g.pixelY -= gSpeed;
+
+                if (Math.abs(pacman.pixelX - g.pixelX) < 14 && Math.abs(pacman.pixelY - g.pixelY) < 14) {
+                    if (g.isFrightened) { score += 200; document.getElementById('score').innerText = score; g.pixelX = 9 * TILE; g.pixelY = 9 * TILE; g.isFrightened = false; }
+                    else gameOver("", true);
+                }
+            });
+        }
+
+        function draw() {
+            ctx.fillStyle = '#000'; ctx.fillRect(0,0,canvas.width, canvas.height);
+            currentMap.forEach((row, y) => {
+                row.forEach((cell, x) => {
+                    const px = x*TILE, py = y*TILE;
+                    if(cell === 1) { ctx.strokeStyle = '#0044cc'; ctx.lineWidth = 2; ctx.strokeRect(px+3, py+3, TILE-6, TILE-6); }
+                    else if(cell === 0) { ctx.fillStyle = '#ffb8ae'; ctx.beginPath(); ctx.arc(px+TILE/2, py+TILE/2, 2, 0, 7); ctx.fill(); }
+                    else if(cell === 3) { if(Date.now()%400 < 200) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(px+TILE/2, py+TILE/2, 6, 0, 7); ctx.fill(); } }
+                });
+            });
+            ctx.save(); ctx.translate(pacman.pixelX+TILE/2, pacman.pixelY+TILE/2); ctx.rotate([0, Math.PI/2, Math.PI, Math.PI*1.5][pacman.dir]); ctx.fillStyle = playerColor; ctx.beginPath();
+            if(playerShape === 'circle') { ctx.moveTo(0,0); ctx.arc(0,0, 9, pacman.mouth*Math.PI, (2-pacman.mouth)*Math.PI); }
+            else if(playerShape === 'square') { ctx.rect(-8, -8, 16, 16); }
+            else if(playerShape === 'triangle') { ctx.moveTo(10, 0); ctx.lineTo(-8, 8); ctx.lineTo(-8, -8); }
+            ctx.fill(); ctx.restore();
+            ghosts.forEach(g => {
+                ctx.fillStyle = g.isFrightened ? '#2222ff' : g.color; if (g.isFrightened && powerTimer < 100 && Date.now()%200 < 100) ctx.fillStyle = '#fff';
+                ctx.beginPath(); ctx.arc(g.pixelX+TILE/2, g.pixelY+TILE/2, 9, Math.PI, 0); ctx.lineTo(g.pixelX+TILE-2, g.pixelY+TILE-2); ctx.lineTo(g.pixelX+2, g.pixelY+TILE-2); ctx.fill();
+                ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(g.pixelX+6, g.pixelY+8, 2.5, 0, 7); ctx.arc(g.pixelX+14, g.pixelY+8, 2.5, 0, 7); ctx.fill();
+            });
+        }
+
+        function gameOver(txt, isDead) {
+            running = false; document.getElementById('ui-overlay').style.display = 'flex';
+            if (isDead) { document.getElementById('victory-box').classList.add('hidden'); document.getElementById('death-box').classList.remove('hidden'); document.getElementById('final-emoji').innerText = "💀"; }
+            else { document.getElementById('victory-box').classList.remove('hidden'); document.getElementById('death-box').classList.add('hidden'); document.getElementById('msg-text').innerText = txt; document.getElementById('final-emoji').innerText = "🌈✨"; }
+        }
+
+        function loop() { if(running) { update(); draw(); requestAnimationFrame(loop); } }
+        window.onkeydown = (e) => { const k = {ArrowRight:0, ArrowDown:1, ArrowLeft:2, ArrowUp:3, d:0, s:1, a:2, w:3}; if(k[e.key] !== undefined) pacman.nextDir = k[e.key]; };
+    </script>
+</body>
+</html>
